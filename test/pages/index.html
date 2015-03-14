@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>popup oauth test</title>
+
+<script src="/popup-oauth.js"></script>
+</head>
+<body>
+
+<a id="thebutton" href="">Click me to start the fun.</a>
+<ul id="messages"></ul>
+<script>
+var messages = document.getElementById('messages');
+function appendMessage(message) {
+    var element = document.createElement('li');
+    element.innerHTML = message;
+    messages.appendChild(element);
+}
+
+appendMessage('started');
+var popup = popupOauth.createPopup("http://dev.com:3000/redirect.html", {
+    features: {
+        width: "300",
+        height: "300",
+        left: "100",
+        top: "100"
+    },
+    onBeforeCloseWindow: function (openedWindow) {
+        appendMessage("qa - " + openedWindow.location.search);
+    }
+});
+var button = document.getElementById('thebutton');
+button.onclick = function (event) {
+    event.preventDefault();
+    popup.openWindow();
+};
+</script>
+</body>
+</html>
