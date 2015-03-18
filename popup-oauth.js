@@ -20,12 +20,13 @@
         }
     }
 
-    // TODO: add cleanup of setTimeout and extra instances attached to the same window
-
+    var popupId = 0;
     function Popup(url, options) {
         if (options === undefined) {
             options = {};
         }
+        popupId = popupId + 1;
+        var id = 'popup' + popupId;
 
         var defaultFeatures = {
             height: 300,
@@ -34,24 +35,43 @@
         var optionsFeatures = options.features || {};
 
         var defaults = {
-            pollWindowInterval: 100,
-            shouldCloseWindow: function (locationOfWindow) {
-                return locationOfWindow.hostname == location.hostname;
-            }
+            pollWindowInterval: 100
         };
 
         setDefaults(options, defaults);
+        var self = this;
+
+        var _pollWindowTimeout;
+        var _openWindow;
+        var _pollWindowShouldEmitClosed;
+        var _pollWindowLastLocationEmitted;
+
+        var eventListeners = {};
+        var emitEvent = function (eventName) {
+            var data = Array.prototype.slice.call(arguments, 1);
+            var listeners = eventListeners[eventName] || [];
+            for (var i = 0; i < listeners.length; i++) {
+                var listener = listeners[i];
+                try {
+                    listener.apply(self, data);
+                } catch (e) {
+                    logError(e);
+                }
+            }
+        };
+        var listenEvent = function (eventName, listener) {
+            if (!eventListeners[eventName]) {
+                eventListeners[eventName] = [];
+            }
+            eventListeners[eventName].push(listener);
+        }
+        var resetEventListeners = function () {
+            eventListeners = {};
+        }
         
-        this.url = url;
-        this.options = options;
-    }
-    Popup.prototype = {
-        getWindowName: function () {
-            return "popup-" + this.url.replace(/[^a-zA-Z0-9]+/g, '_');
-        },
-        getWindowFeatures: function () {
+        var getFeatures = function () {
             var featuresString = "";
-            var features = this.options.features || {};
+            var features = options.features || {};
             for (var key in features) {
                 if (features.hasOwnProperty(key)) {
                     var value = features[key];
@@ -62,54 +82,99 @@
                 featuresString = featuresString.substring(0, featuresString.length - 1);
             }
             return featuresString;
-        },
-        openWindow: function () {
-            this._openWindow = window.open(this.url, this.getWindowName(), this.getWindowFeatures());
-            this.pollWindow();
-        },
-        pollWindow: function () {
-
+        };
+        
+        var pollWindow = function (initialize) {
+            if (initialize) {
+                _pollWindowShouldEmitClosed = true;
+                _pollWindowLastLocationEmitted = undefined;
+            }
+            if (!_openWindow || _openWindow.closed) {
+                if (_pollWindowShouldEmitClosed) {
+                    emitEvent("close", false);
+                }
+                return;
+            }
             try {
-                var canAccessLocation = this._openWindow.location && this._openWindow.location.hostname;
+                var canAccessLocation = _openWindow.location && _openWindow.location.hostname;
             } catch (e) {
-                canAccessLocation = undefined;
+                canAccessLocation = false;
             }
+            if (canAccessLocation && _pollWindowLastLocationEmitted != _openWindow.location.href) {
+                emitEvent("location", _openWindow.location);
+                _pollWindowLastLocationEmitted = _openWindow.location.href;
+            }
+            _pollWindowTimeout = setTimeout(function () {
+                pollWindow();
+            }, options.pollWindowInterval);
+        };
+        
+        this.isPopped = function () {
+            if (_openWindow && !_openWindow.closed) {
+                return true;
+            }
+            return false;
+        }
 
-            if (canAccessLocation && this.shouldCloseWindow(this._openWindow.location)) {
-                this.closeWindow();
-            } else {
-                var self = this;
-                setTimeout(function () {
-                    self.pollWindow();
-                }, this.options.pollWindowInterval);
+        this.focus = function () {
+            if (_openWindow) {
+                _openWindow.focus();
             }
-        },
-        closeWindow: function () {
-            var fn = this.options.onBeforeCloseWindow;
-            if (fn) {
-                try {
-                    fn(this._openWindow);
-                } catch (e) {
-                    logError("onBeforeCloseWindow error - " + e);
+        }
+
+        this.pop = function () {
+            if (_pollWindowTimeout) {
+                clearTimeout(_pollWindowTimeout);
+            }
+            _openWindow = window.open(url, id, getFeatures());
+            pollWindow(true);
+            listenEvent("close", function () {
+                resetEventListeners();
+            });
+            return this;
+        };
+        
+        this.on = function (eventName, callback) {
+            listenEvent(eventName, callback);
+            return this;
+        };
+
+        this.close = function () {
+            if (_pollWindowTimeout) {
+                clearTimeout(_pollWindowTimeout);
+            }
+            _pollWindowShouldEmitClosed = false;
+            _openWindow.close();
+            emitEvent("close", true);
+            return this;
+        };
+    }
+
+    var popups = [];
+    var popupOauth = function (url, options) {
+        var popup = new Popup(url, options);
+        popup.on("close", function () {
+            var popupIndex;
+            for (var i = 0; i < popups.length; i++) {
+                if (popups[i] == popup) {
+                    popupIndex = i;
+                    break;
                 }
             }
-            this._openWindow.close();
-        },
-        shouldCloseWindow: function (locationOfWindow) {
-            var fn = this.options.shouldCloseWindow;
-            var returnValue;
-            try {
-                returnValue = fn(locationOfWindow);
-            } catch (e) {
-                logError("shouldCloseWindow function failed - " + e);
+            popups.splice(popupIndex, 1);
+        });
+        popups.push(popup);
+        return popup;
+    };
+    popupOauth.getByUrl = function (url) {
+        var returnPopups = [];
+        for (var i=0; i < popups.length; i++) {
+            if (popups[i].url == url) {
+                returnPopups.push(popups[i]);
             }
-            return returnValue;
         }
+        return returnPopups;
     };
 
-    return {
-        createPopup: function (url, options) {
-            return new Popup(url, options);
-        }
-    };
+    return popupOauth;
 }));

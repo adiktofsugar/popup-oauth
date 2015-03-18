@@ -16,52 +16,65 @@ You're integrating with facebook (without their SDK). To log a user in, you have
 If it's totally server-side, the user must be redirected away, which sucks for just linking facebook to an account, since it feels so heavy. To do it client side, you have to put the redirect dance into a popup then have the popup relay information to you after the oauth dance.
 
 ```
-// This api is going to change a lot to be easier to use, but it does take care of the polling for you
-var popup = popupOauth.createPopup('https://facebook.com/auth?...', {
-    features: {
-        width: "300",
-        height: "300",
-        left: "100",
-        top: "100"
-    },
-
-    // Happenes right before the window is actually closed
-    onBeforeCloseWindow: function (openedWindow) {
-        var queryString = openedWindow.location.search;
-        var queryStringParameters = (function (queryString) {
-            // deserialize query string from the key values and whatever
-        }(queryString));
-        var accessToken = queryStringParameters.access_token;
-        if (!accessToken) {
-            handleNoAccessToken(queryStringParameters);
-        } else {
-            handleHasAccessToken(queryStringParameters);
-        }
-    },
-
-    // condition to close the window
-    shouldCloseWindow: function (openedWindowLocation) {
-        return openedWindowLocation.hostname == location.hostname;
-    });
-button.onclick = function (event) {
-    event.preventDefault();
-    popup.openWindow();
-}
-```
-
-Future api...
-```
-var facebookPopup = popupOauth(facebookAuthUri, {
-        features: {},
-        locationCloseMatcher: function (otherLocation) {
-            return otherLocation.hostname == location.hostname;
+var url = "https://facebook.com/auth?redirect_uri=" + location.href;
+var popup = popupOauth(url, {
+        features: {
+            width: "300",
+            height: "300",
+            left: "100",
+            top: "100"
         }
     });
 button.onclick = function (event) {
     event.preventDefault();
-    facebookPopup.pop(function (error, data) {
-        // error could be if window is closed manually
-        // data is the query string and anchor parameters, and includes the original location object
-    });
-}
+
+    if (popup.isPopped()) {
+        popup.focus();
+        return;
+    }
+
+    popup.on("error", function (error) {
+        appendMessage("error - " + error);
+    })
+    .on("close", function (closedByPopup) {
+        if (!closedByPopup) {
+            appendMessage("user closed window");
+        }
+    })
+    .on("location", function (loc) {
+        this.close();
+    })
+    .pop()
+};
+</script>
 ```
+## API
+
+## `popupOauth(url, options)` -> Popup
+creates a popup that will pop a window at `url`
+`options.features` - popup window features as an object)
+`pollWindowInterval` - an interval in ms that the window is polled for accessibility and to emit events
+
+## `popupOauth.getByUrl(url)` -> Array<Popup>
+gets the popups by the url that they should have opened initially
+
+## `.on(eventName, listener)` -> this
+adds an event listener to the event name
+
+# events
+All events are called in the context of the current Popup.
+`location (popupWindowLocation)` -> when the location of the popup window is accessible, and when it changes
+`close (closedByPopup)` -> when the popup window closes
+`error (error)` -> When something goes wrong. There's not any time when this fires at the moment
+
+## `.pop()` -> this
+Actually creates the popup window
+
+## `.close()` -> this
+Closes the popup window
+
+## `.isPopped()` -> Boolean
+Whether or not the popup is currently open
+
+## `.focus()` -> undefined
+Focuses the popup window

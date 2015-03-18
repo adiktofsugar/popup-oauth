@@ -18,21 +18,36 @@ function appendMessage(message) {
 }
 
 appendMessage('started');
-var popup = popupOauth.createPopup("http://dev.com:3000/redirect.html", {
-    features: {
-        width: "300",
-        height: "300",
-        left: "100",
-        top: "100"
-    },
-    onBeforeCloseWindow: function (openedWindow) {
-        appendMessage("qa - " + openedWindow.location.search);
-    }
-});
 var button = document.getElementById('thebutton');
+
+var url = "http://dev.com:3000/redirect.html";
+var popup = popupOauth(url, {
+        features: {
+            width: "300",
+            height: "300",
+            left: "100",
+            top: "100"
+        }
+    });
 button.onclick = function (event) {
     event.preventDefault();
-    popup.openWindow();
+
+    if (popup.isPopped()) {
+        popup.focus();
+    }
+
+    popup.on("error", function (error) {
+        appendMessage("error - " + error);
+    })
+    .on("close", function (closedByPopup) {
+        if (!closedByPopup) {
+            appendMessage("user closed window");
+        }
+    })
+    .on("location", function (loc) {
+        this.close();
+    })
+    .pop()
 };
 </script>
 </body>
