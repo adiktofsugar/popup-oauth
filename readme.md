@@ -48,7 +48,7 @@ button.onclick = function (event) {
 };
 </script>
 ```
-## API
+# API
 
 ## `popupOauth(url, options)` -> Popup
 creates a popup that will pop a window at `url`
@@ -61,11 +61,11 @@ gets the popups by the url that they should have opened initially
 ## `.on(eventName, listener)` -> this
 adds an event listener to the event name
 
-# events
+## events
 All events are called in the context of the current Popup.
-`location (popupWindowLocation)` -> when the location of the popup window is accessible, and when it changes
-`close (closedByPopup)` -> when the popup window closes
-`error (error)` -> When something goes wrong. There's not any time when this fires at the moment
+- `location (popupWindowLocation)` -> when the location of the popup window is accessible, and when it changes
+- `close (closedByPopup)` -> when the popup window closes
+- `error (error)` -> When something goes wrong. There's not any time when this fires at the moment
 
 ## `.pop()` -> this
 Actually creates the popup window
